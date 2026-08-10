@@ -5,6 +5,11 @@ import yt_dlp
 DOWNLOADS_DIR = Path(__file__).resolve().parent.parent.parent / "downloads"
 DOWNLOADS_DIR.mkdir(exist_ok=True)
 
+# Render monta los "Secret Files" en /etc/secrets/<nombre>. Localmente, podés
+# poner tu cookies.txt junto al proyecto y apuntar la variable de entorno
+# COOKIES_FILE a esa ruta. Este archivo NUNCA debe subirse a GitHub.
+COOKIES_FILE = os.getenv("COOKIES_FILE", "/etc/secrets/cookies.txt")
+
 # Simula la app de Android de YouTube en vez del sitio web. Esto evita el
 # bloqueo "Sign in to confirm you're not a bot" que YouTube aplica a
 # peticiones que vienen desde IPs de servidores en la nube (Render, AWS, etc).
@@ -15,6 +20,9 @@ YOUTUBE_CLIENT_ARGS = {
         }
     }
 }
+
+if os.path.exists(COOKIES_FILE):
+    YOUTUBE_CLIENT_ARGS["cookiefile"] = COOKIES_FILE
 
 
 def search_tracks(query: str, limit: int = 10) -> list[dict]:
