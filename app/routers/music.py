@@ -1,6 +1,7 @@
-from fastapi import APIRouter, HTTPException, Depends
-from fastapi.responses import RedirectResponse, FileResponse
+from fastapi import APIRouter, HTTPException, Depends, Request
+from fastapi.responses import RedirectResponse, FileResponse, StreamingResponse
 from sqlalchemy.orm import Session
+import httpx
 
 from app.services import music_service
 from app.database import get_db
@@ -48,13 +49,49 @@ def search(q: str, limit: int = 10):
 
 
 @router.get("/stream/{video_id}")
-def stream(video_id: str):
-    """Redirige a la URL de audio directa (streaming, sin guardar en disco)."""
+async def stream(video_id: str, request: Request):
+    """Actúa como puente: el backend pide el audio a YouTube (misma IP que
+    obtuvo la URL firmada) y se lo reenvía al navegador/celular, en vez de
+    redirigir directamente (YouTube rechaza la URL si la pide otra IP)."""
     try:
         url = music_service.get_stream_url(video_id)
-        return RedirectResponse(url)
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Error obteniendo el stream: {e}")
+
+    range_header = request.headers.get("range")
+    headers = {"User-Agent": "Mozilla/5.0"}
+    if range_header:
+        headers["Range"] = range_header
+
+    client = httpx.AsyncClient(timeout=30.0)
+    try:
+        upstream = await client.send(
+            client.build_request("GET", url, headers=headers), stream=True
+        )
+    except Exception as e:
+        await client.aclose()
+        raise HTTPException(status_code=502, detail=f"Error conectando con YouTube: {e}")
+
+    async def body_iterator():
+        try:
+            async for chunk in upstream.aiter_bytes():
+                yield chunk
+        finally:
+            await upstream.aclose()
+            await client.aclose()
+
+    response_headers = {}
+    for key in ("content-length", "content-range", "accept-ranges", "content-type"):
+        if key in upstream.headers:
+            response_headers[key] = upstream.headers[key]
+    response_headers.setdefault("accept-ranges", "bytes")
+    response_headers.setdefault("content-type", "audio/webm")
+
+    return StreamingResponse(
+        body_iterator(),
+        status_code=upstream.status_code,
+        headers=response_headers,
+    )
 
 
 @router.post("/download/{video_id}")
