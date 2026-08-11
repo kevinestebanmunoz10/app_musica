@@ -24,7 +24,7 @@ elif os.path.exists(_SECRET_COOKIES_PATH.lstrip("/")):
 YOUTUBE_CLIENT_ARGS = {
     "extractor_args": {
         "youtube": {
-            "player_client": ["android", "web"],
+            "player_client": ["android"],
         }
     }
 }
