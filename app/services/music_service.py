@@ -1,14 +1,22 @@
 import os
+import shutil
 from pathlib import Path
 import yt_dlp
 
 DOWNLOADS_DIR = Path(__file__).resolve().parent.parent.parent / "downloads"
 DOWNLOADS_DIR.mkdir(exist_ok=True)
 
-# Render monta los "Secret Files" en /etc/secrets/<nombre>. Localmente, podés
-# poner tu cookies.txt junto al proyecto y apuntar la variable de entorno
-# COOKIES_FILE a esa ruta. Este archivo NUNCA debe subirse a GitHub.
-COOKIES_FILE = os.getenv("COOKIES_FILE", "/etc/secrets/cookies.txt")
+# Render monta los "Secret Files" en /etc/secrets/<nombre> como SOLO LECTURA,
+# pero yt-dlp necesita poder reescribir el archivo de cookies tras usarlo.
+# Por eso lo copiamos a una carpeta escribible antes de usarlo.
+_SECRET_COOKIES_PATH = os.getenv("COOKIES_FILE", "/etc/secrets/cookies.txt")
+COOKIES_FILE = str(DOWNLOADS_DIR.parent / "cookies_writable.txt")
+
+if os.path.exists(_SECRET_COOKIES_PATH):
+    shutil.copyfile(_SECRET_COOKIES_PATH, COOKIES_FILE)
+elif os.path.exists(_SECRET_COOKIES_PATH.lstrip("/")):
+    # Algunas plataformas montan el secret relativo a la raíz del proyecto
+    shutil.copyfile(_SECRET_COOKIES_PATH.lstrip("/"), COOKIES_FILE)
 
 # Simula la app de Android de YouTube en vez del sitio web. Esto evita el
 # bloqueo "Sign in to confirm you're not a bot" que YouTube aplica a
